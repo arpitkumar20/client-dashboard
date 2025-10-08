@@ -1,0 +1,40 @@
+{
+  "compilerOptions": {
+    /* === Target & Language Support === */
+    "target": "ES2020",
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "useDefineForClassFields": true,
+
+    /* === Module Resolution & Build === */
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "isolatedModules": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "skipLibCheck": true,
+
+    /* === JS/JSX Compatibility === */
+    "allowJs": true,              // allows importing .js / .jsx files
+    "checkJs": false,             // avoids type-checking plain JS files
+
+    /* === Strictness & Safety === */
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+
+    /* === Path Aliases (optional but handy) === */
+    "baseUrl": "src",
+    "paths": {
+      "@/*": ["*"]
+    }
+  },
+
+  /* === Project Includes === */
+  "include": ["src"],
+
+  /* === Optional Exclusions === */ 
+  "exclude": ["node_modules", "dist"]
+}
