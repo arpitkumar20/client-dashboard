@@ -46,7 +46,7 @@ jobs:
             # Build new Docker image with dynamic tag
             docker build -t client-dashboard:${IMAGE_TAG} .
 
-            # Run new container on port 3000
-            docker run -d --name client-dashboard -p 3000:3000 client-dashboard:${IMAGE_TAG}
+            # Run new container on port 3001
+            docker run -d --name client-dashboard -p 3001:3001 client-dashboard:${IMAGE_TAG}
 
             echo "✅ Deployment complete with image tag: ${IMAGE_TAG}"
