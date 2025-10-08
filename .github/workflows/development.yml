@@ -49,4 +49,7 @@ jobs:
             # Run new container on port 3001
             docker run -d --name client-dashboard -p 3001:3001 client-dashboard:${IMAGE_TAG}
 
+            # Cleanup unused old images
+            docker image prune -af
+
             echo "✅ Deployment complete with image tag: ${IMAGE_TAG}"
