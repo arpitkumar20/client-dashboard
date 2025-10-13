@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Menu } from '@headlessui/react';
 import { BellIcon, MoonIcon, SunIcon } from '@heroicons/react/24/outline';
 import { useDarkMode } from '../../hooks/useDarkMode';
@@ -12,6 +12,27 @@ export const Navbar = () => {
     { id: 2, message: 'Lead status updated', time: '10 minutes ago' },
     { id: 3, message: 'System maintenance scheduled', time: '1 hour ago' },
   ]);
+  const [profileUrl, setProfileUrl] = useState(null);
+  const [fullName, setFullName] = useState('Admin User');
+  const [role, setRole] = useState('Hospital Administrator');
+
+  useEffect(() => {
+    // Get profile_url from localStorage
+    const clientDetails = localStorage.getItem('clientDetails');
+    if (clientDetails) {
+      try {
+        const parsed = JSON.parse(clientDetails);
+        const client = parsed?.data?.client;
+        if (client) {
+          setProfileUrl(client.profile_url);
+          setFullName(client.full_name || 'Admin User');
+          setRole(client.role || 'Hospital Administrator');
+        }
+      } catch (e) {
+        console.error('Error parsing clientDetails for Navbar:', e);
+      }
+    }
+  }, []);
 
   // ✅ Function to handle navigation
   const goToProfileSettings = () => {
@@ -82,15 +103,23 @@ export const Navbar = () => {
           {/* 👤 Profile Dropdown */}
           <Menu as="div" className="relative">
             <Menu.Button className="flex items-center space-x-2 p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
-              <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
-                <span className="text-white font-medium text-sm">AD</span>
-              </div>
+              {profileUrl ? (
+                <img
+                  src={profileUrl}
+                  alt="Profile"
+                  className="w-8 h-8 rounded-full object-cover border-2 border-blue-600"
+                />
+              ) : (
+                <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
+                  <span className="text-white font-medium text-sm">AD</span>
+                </div>
+              )}
               <div className="hidden md:block text-left">
                 <p className="text-sm font-medium text-gray-900 dark:text-white">
-                  Admin User
+                  {fullName}
                 </p>
                 <p className="text-xs text-gray-500 dark:text-gray-400">
-                  Hospital Administrator
+                  {role}
                 </p>
               </div>
             </Menu.Button>
