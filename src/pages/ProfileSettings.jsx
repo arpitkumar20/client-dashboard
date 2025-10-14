@@ -1,17 +1,18 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '../components/ui/Button';
 import { Toast } from '../components/ui/Toast';
 import { PencilIcon, EyeIcon, EyeSlashIcon, DocumentIcon } from '@heroicons/react/24/solid';
+import clientService from '../services/clientService';
 
 const defaultProfile = {
-  logo: null,
+  logo: null, // File object or null
+  logoPreviewUrl: null, // for preview only
   name: 'John Doe',
   email: 'johndoe@example.com',
   phone: '+1 234 567 890',
   address: '123 Main Street, City, Country',
   documents: [
-    { id: 1, name: 'Resume.pdf', fileUrl: '' },
-    { id: 2, name: 'ID Card.pdf', fileUrl: '' },
+    // { id, name, file: File, previewUrl: string }
   ],
   connector: {
     type: 'PostgreSQL',
@@ -28,10 +29,80 @@ const defaultProfile = {
 
 export const ProfileSettings = () => {
   const [profile, setProfile] = useState(defaultProfile);
+  const [originalProfile, setOriginalProfile] = useState(defaultProfile);
   const [isEditing, setIsEditing] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [toast, setToast] = useState({ show: false, type: 'success', message: '' });
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    // Try to get clientId from localStorage, fallback to extracting from clientDetails
+    let clientId = localStorage.getItem('clientId');
+    if (!clientId) {
+      const clientDetails = localStorage.getItem('clientDetails');
+      if (clientDetails) {
+        try {
+          const parsed = JSON.parse(clientDetails);
+          clientId = parsed && parsed.data && parsed.data.client && parsed.data.client.id;
+          console.log('Extracted clientId from clientDetails:', clientId);
+        } catch (e) {
+          console.error('Error parsing clientDetails from localStorage:', e);
+        }
+      }
+    } else {
+      console.log('Read clientId from localStorage:', clientId);
+    }
+    if (clientId) {
+      clientService.getClientById(clientId)
+        .then((data) => {
+          console.log('Fetched client data by ID:', data);
+          if (data && Array.isArray(data.data) && data.data.length > 0) {
+            const d = data.data[0];
+            // Normalize connector type for UI
+            let connectorType = '';
+            if (d.connector_type) {
+              if (d.connector_type.toLowerCase() === 'postgresql') connectorType = 'PostgreSQL';
+              else if (d.connector_type.toLowerCase() === 'zoho') connectorType = 'Zoho';
+              else connectorType = d.connector_type;
+            }
+            // Fill Zoho config fields if type is Zoho, support both camelCase and snake_case
+            let clientId = '', clientSecret = '', refreshToken = '';
+            if (connectorType === 'Zoho' && d.config) {
+              clientId = d.config.clientId || d.config.client_id || '';
+              clientSecret = d.config.clientSecret || d.config.client_secret || '';
+              refreshToken = d.config.refreshToken || d.config.refresh_token || '';
+            }
+            const loadedProfile = {
+              logo: d.logo || null,
+              name: d.full_name || '',
+              email: d.email || '',
+              phone: d.phone || '',
+              address: d.address || '',
+              documents: Array.isArray(d.client_documents)
+                ? d.client_documents.map((url, idx) => ({ id: idx + 1, name: url.split('/').pop(), fileUrl: url }))
+                : [],
+              connector: {
+                type: connectorType,
+                host: d.config?.host || '',
+                port: '', // Not provided in API, left blank
+                user: d.config?.username || '',
+                password: d.config?.password || '',
+                dbName: d.config?.database || '',
+                clientId,
+                clientSecret,
+                refreshToken,
+              },
+            };
+            console.log('Loaded Zoho config:', { clientId, clientSecret, refreshToken }, 'Full connector:', loadedProfile.connector);
+            setProfile(loadedProfile);
+            setOriginalProfile(loadedProfile);
+          }
+        })
+        .catch((err) => {
+          setToast({ show: true, type: 'error', message: 'Failed to fetch client details.' });
+        });
+    }
+  }, []);
 
   const showToast = (type, message) => setToast({ show: true, type, message });
 
@@ -50,7 +121,12 @@ export const ProfileSettings = () => {
 
   const handleLogoUpload = (e) => {
     if (!e.target.files || e.target.files.length === 0) return;
-    setProfile({ ...profile, logo: URL.createObjectURL(e.target.files[0]) });
+    const file = e.target.files[0];
+    setProfile({
+      ...profile,
+      logo: file,
+      logoPreviewUrl: URL.createObjectURL(file),
+    });
   };
 
   const handleDocumentUpload = (e) => {
@@ -58,7 +134,8 @@ export const ProfileSettings = () => {
     const newDocs = Array.from(e.target.files).map((file) => ({
       id: Date.now() + '-' + file.name,
       name: file.name,
-      fileUrl: URL.createObjectURL(file),
+      file,
+      previewUrl: URL.createObjectURL(file),
     }));
     setProfile({ ...profile, documents: [...profile.documents, ...newDocs] });
   };
@@ -66,9 +143,62 @@ export const ProfileSettings = () => {
   const removeDocument = (id) =>
     setProfile({ ...profile, documents: profile.documents.filter((d) => d.id !== id) });
 
-  const handleSave = () => {
-    setIsEditing(false);
-    handleAction('Profile updated');
+  const handleSave = async () => {
+    setLoading(true);
+    try {
+      // Get clientId from localStorage (or fallback)
+      let clientId = localStorage.getItem('clientId');
+      if (!clientId) {
+        const clientDetails = localStorage.getItem('clientDetails');
+        if (clientDetails) {
+          try {
+            const parsed = JSON.parse(clientDetails);
+            clientId = parsed && parsed.data && parsed.data.client && parsed.data.client.id;
+          } catch (e) {}
+        }
+      }
+      if (!clientId) throw new Error('No client ID found');
+
+        // Always send original values for url and client_ref
+      const formData = new FormData();
+      formData.append('full_name', profile.name);
+      formData.append('address', profile.address);
+        formData.append('url', originalProfile.url);
+      formData.append('email', profile.email ?? '');
+      formData.append('phone', profile.phone ?? '');
+      formData.append('notes', profile.notes ?? '');
+        formData.append('client_ref', originalProfile.client_ref);
+      formData.append('status', profile.status ?? '');
+      formData.append('connector_type', profile.connector.type ?? '');
+      // Logo upload
+      if (profile.logo instanceof File) {
+        formData.append('logo', profile.logo);
+      }
+      // Config as JSON string
+      formData.append('config', JSON.stringify({
+        host: profile.connector.host ?? '',
+        database: profile.connector.dbName ?? '',
+        username: profile.connector.user ?? '',
+        password: profile.connector.password ?? '',
+      }));
+      // Documents (if any)
+      if (Array.isArray(profile.documents)) {
+        profile.documents.forEach((doc) => {
+          if (doc.file instanceof File) {
+            formData.append('documents', doc.file, doc.name);
+          }
+        });
+      }
+
+      await clientService.updateClient(clientId, formData);
+      setIsEditing(false);
+      setLoading(false);
+      setToast({ show: true, type: 'success', message: 'Profile updated successfully!' });
+    } catch (err) {
+      setLoading(false);
+      setToast({ show: true, type: 'error', message: 'Failed to update profile.' });
+      console.error('Profile update error:', err);
+    }
   };
 
   return (
