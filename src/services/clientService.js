@@ -38,11 +38,17 @@ const clientService = {
           console.log(key, value);
         });
       }
-      const response = await axios.put(url, formData);
+      // Axios does not set Content-Type for FormData in PUT, so set it manually
+      const response = await axios.put(url, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
       return response.data;
     } catch (error) {
       if (error.response) {
         console.error('Update client error response:', error.response.data);
+        if (error.response.data && error.response.data.message) {
+          alert('Update failed: ' + error.response.data.message);
+        }
       }
       console.error('Update client error:', error);
       throw error;

@@ -5,14 +5,14 @@ import { PencilIcon, EyeIcon, EyeSlashIcon, DocumentIcon } from '@heroicons/reac
 import clientService from '../services/clientService';
 
 const defaultProfile = {
-  logo: null,  
+  logo: null, // File object or null
+  logoPreviewUrl: null, // for preview only
   name: 'John Doe',
   email: 'johndoe@example.com',
   phone: '+1 234 567 890',
   address: '123 Main Street, City, Country',
   documents: [
-    { id: 1, name: 'Resume.pdf', fileUrl: '' },
-    { id: 2, name: 'ID Card.pdf', fileUrl: '' },
+    // { id, name, file: File, previewUrl: string }
   ],
   connector: {
     type: 'PostgreSQL',
@@ -58,6 +58,20 @@ export const ProfileSettings = () => {
           console.log('Fetched client data by ID:', data);
           if (data && Array.isArray(data.data) && data.data.length > 0) {
             const d = data.data[0];
+            // Normalize connector type for UI
+            let connectorType = '';
+            if (d.connector_type) {
+              if (d.connector_type.toLowerCase() === 'postgresql') connectorType = 'PostgreSQL';
+              else if (d.connector_type.toLowerCase() === 'zoho') connectorType = 'Zoho';
+              else connectorType = d.connector_type;
+            }
+            // Fill Zoho config fields if type is Zoho, support both camelCase and snake_case
+            let clientId = '', clientSecret = '', refreshToken = '';
+            if (connectorType === 'Zoho' && d.config) {
+              clientId = d.config.clientId || d.config.client_id || '';
+              clientSecret = d.config.clientSecret || d.config.client_secret || '';
+              refreshToken = d.config.refreshToken || d.config.refresh_token || '';
+            }
             const loadedProfile = {
               logo: d.logo || null,
               name: d.full_name || '',
@@ -68,17 +82,18 @@ export const ProfileSettings = () => {
                 ? d.client_documents.map((url, idx) => ({ id: idx + 1, name: url.split('/').pop(), fileUrl: url }))
                 : [],
               connector: {
-                type: d.connector_type === 'postgresql' ? 'PostgreSQL' : (d.connector_type || ''),
+                type: connectorType,
                 host: d.config?.host || '',
                 port: '', // Not provided in API, left blank
                 user: d.config?.username || '',
                 password: d.config?.password || '',
                 dbName: d.config?.database || '',
-                clientId: '', // Only for Zoho
-                clientSecret: '', // Only for Zoho
-                refreshToken: '', // Only for Zoho
+                clientId,
+                clientSecret,
+                refreshToken,
               },
             };
+            console.log('Loaded Zoho config:', { clientId, clientSecret, refreshToken }, 'Full connector:', loadedProfile.connector);
             setProfile(loadedProfile);
             setOriginalProfile(loadedProfile);
           }
@@ -106,7 +121,12 @@ export const ProfileSettings = () => {
 
   const handleLogoUpload = (e) => {
     if (!e.target.files || e.target.files.length === 0) return;
-    setProfile({ ...profile, logo: URL.createObjectURL(e.target.files[0]) });
+    const file = e.target.files[0];
+    setProfile({
+      ...profile,
+      logo: file,
+      logoPreviewUrl: URL.createObjectURL(file),
+    });
   };
 
   const handleDocumentUpload = (e) => {
@@ -114,7 +134,8 @@ export const ProfileSettings = () => {
     const newDocs = Array.from(e.target.files).map((file) => ({
       id: Date.now() + '-' + file.name,
       name: file.name,
-      fileUrl: URL.createObjectURL(file),
+      file,
+      previewUrl: URL.createObjectURL(file),
     }));
     setProfile({ ...profile, documents: [...profile.documents, ...newDocs] });
   };
@@ -138,38 +159,34 @@ export const ProfileSettings = () => {
       }
       if (!clientId) throw new Error('No client ID found');
 
-      // Always send required fields, send others only if changed
+        // Always send original values for url and client_ref
       const formData = new FormData();
       formData.append('full_name', profile.name);
       formData.append('address', profile.address);
-      formData.append('url', profile.url);
-      if (profile.email !== originalProfile.email) formData.append('email', profile.email);
-      if (profile.phone !== originalProfile.phone) formData.append('phone', profile.phone);
-      if (profile.notes !== originalProfile.notes) formData.append('notes', profile.notes);
-      if (profile.client_ref !== originalProfile.client_ref) formData.append('client_ref', profile.client_ref);
-      if (profile.status !== originalProfile.status) formData.append('status', profile.status);
-      if (profile.connector.type !== originalProfile.connector.type) formData.append('connector_type', profile.connector.type);
-      // Logo upload logic can be added here if needed
-      // Config (compare as JSON string)
-      const currentConfig = JSON.stringify({
-        host: profile.connector.host || '',
-        database: profile.connector.dbName || '',
-        username: profile.connector.user || '',
-        password: profile.connector.password || '',
-      });
-      const originalConfig = JSON.stringify({
-        host: originalProfile.connector.host || '',
-        database: originalProfile.connector.dbName || '',
-        username: originalProfile.connector.user || '',
-        password: originalProfile.connector.password || '',
-      });
-      if (currentConfig !== originalConfig) formData.append('config', currentConfig);
-      // Documents (compare arrays by fileUrl)
-      const currentDocs = (profile.documents || []).map(d => d.fileUrl).join(',');
-      const originalDocs = (originalProfile.documents || []).map(d => d.fileUrl).join(',');
-      if (currentDocs !== originalDocs) {
-        (profile.documents || []).forEach((doc) => {
-          if (doc.fileUrl) formData.append('documents', doc.fileUrl);
+        formData.append('url', originalProfile.url);
+      formData.append('email', profile.email ?? '');
+      formData.append('phone', profile.phone ?? '');
+      formData.append('notes', profile.notes ?? '');
+        formData.append('client_ref', originalProfile.client_ref);
+      formData.append('status', profile.status ?? '');
+      formData.append('connector_type', profile.connector.type ?? '');
+      // Logo upload
+      if (profile.logo instanceof File) {
+        formData.append('logo', profile.logo);
+      }
+      // Config as JSON string
+      formData.append('config', JSON.stringify({
+        host: profile.connector.host ?? '',
+        database: profile.connector.dbName ?? '',
+        username: profile.connector.user ?? '',
+        password: profile.connector.password ?? '',
+      }));
+      // Documents (if any)
+      if (Array.isArray(profile.documents)) {
+        profile.documents.forEach((doc) => {
+          if (doc.file instanceof File) {
+            formData.append('documents', doc.file, doc.name);
+          }
         });
       }
 
