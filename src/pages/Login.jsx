@@ -18,9 +18,17 @@ const Login = () => {
       const data = await authService.login(user_name, password);
       // Debug: log the full login response
       console.log('Full login API response:', data);
+      
+      // Store the token from the login response
+      if (data && data.data && data.data.token) {
+        localStorage.setItem('token', data.data.token);
+        console.log('Token saved to localStorage:', data.data.token.substring(0, 20) + '...');
+      }
+      
       // Store all client details in localStorage
-      // Log the full login API response data
+      localStorage.setItem('clientDetails', JSON.stringify(data));
       console.log('Login API response data:', data);
+      
       let clientId = null;
       if (data && typeof data === 'object') {
         // Extract clientId from the login response
