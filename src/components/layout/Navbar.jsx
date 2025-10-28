@@ -44,8 +44,10 @@ export const Navbar = () => {
   };
 
   const handleSignOut = () => {
-    // In real-world: clear auth tokens, redirect to login
-    navigate('/login');
+    // Clear auth tokens and redirect to login
+    localStorage.removeItem('token');
+    localStorage.removeItem('clientDetails');
+    navigate('/');
   };
 
   return (

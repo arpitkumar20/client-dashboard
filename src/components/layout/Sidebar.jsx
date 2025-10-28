@@ -14,7 +14,7 @@ import {
 } from '@heroicons/react/24/outline';
 
 const menuItems = [
-  { name: 'Dashboard', path: '/', icon: HomeIcon },
+  { name: 'Dashboard', path: '/dashboard', icon: HomeIcon },
   { name: 'Leads', path: '/leads', icon: UserGroupIcon },
   { name: 'Appointments', path: '/appointments', icon: CalendarDaysIcon },
   { name: 'Information Feed', path: '/info-feed', icon: InformationCircleIcon },
